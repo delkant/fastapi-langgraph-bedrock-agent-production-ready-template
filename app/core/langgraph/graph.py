@@ -74,29 +74,7 @@ class LangGraphAgent:
 
     async def _long_term_memory(self) -> AsyncMemory:
         """Initialize the long term memory."""
-        if self.memory is None:
-            # Configure providers based on LLM_PROVIDER setting
-            if settings.LLM_PROVIDER == "bedrock":
-                # For now, fallback to OpenAI for memory until mem0ai Bedrock support is stable
-                # TODO: Revisit when mem0ai has better Bedrock embeddings support
-                llm_config = {
-                    "provider": "openai",
-                    "config": {"model": settings.LONG_TERM_MEMORY_OPENAI_MODEL}
-                }
-                embedder_config = {
-                    "provider": "openai",
-                    "config": {"model": settings.LONG_TERM_MEMORY_OPENAI_EMBEDDER}
-                }
-            else:
-                llm_config = {
-                    "provider": "openai",
-                    "config": {"model": settings.LONG_TERM_MEMORY_MODEL}
-                }
-                embedder_config = {
-                    "provider": "openai",
-                    "config": {"model": settings.LONG_TERM_MEMORY_EMBEDDER_MODEL}
-                }
-
+        if self.memory is None:           
             self.memory = await AsyncMemory.from_config(
                 config_dict={
                     "vector_store": {
@@ -110,8 +88,11 @@ class LangGraphAgent:
                             "port": settings.POSTGRES_PORT,
                         },
                     },
-                    "llm": llm_config,
-                    "embedder": embedder_config,
+                    "llm": {
+                        "provider": "openai",
+                        "config": {"model": settings.LONG_TERM_MEMORY_OPENAI_MODEL}
+                    },
+                    "embedder": {"provider": "openai", "config": {"model": settings.LONG_TERM_MEMORY_EMBEDDER_MODEL}},
                     # "custom_fact_extraction_prompt": load_custom_fact_extraction_prompt(),
                 }
             )
