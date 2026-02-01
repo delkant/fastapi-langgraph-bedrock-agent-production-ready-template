@@ -89,10 +89,10 @@ class LangGraphAgent:
                         },
                     },
                     "llm": {
-                        "provider": "openai",
-                        "config": {"model": settings.LONG_TERM_MEMORY_OPENAI_MODEL}
+                        "provider": settings.LLM_PROVIDER,
+                        "config": {"model": settings.LONG_TERM_MEMORY_MODEL}
                     },
-                    "embedder": {"provider": "openai", "config": {"model": settings.LONG_TERM_MEMORY_EMBEDDER_MODEL}},
+                    "embedder": {"provider": settings.LLM_PROVIDER, "config": {"model": settings.LONG_TERM_MEMORY_EMBEDDER_MODEL}},
                     # "custom_fact_extraction_prompt": load_custom_fact_extraction_prompt(),
                 }
             )
