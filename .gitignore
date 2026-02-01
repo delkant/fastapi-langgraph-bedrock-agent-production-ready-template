@@ -12,6 +12,7 @@ wheels/
 
 # Environment variables
 .env
+.env.local
 .env.development
 .env.staging
 .env.production

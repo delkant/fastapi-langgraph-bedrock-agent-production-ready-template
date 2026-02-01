@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <!-- Minimal ClickHouse configuration for local development -->
+
+    <!-- Basic connection settings -->
+    <listen_host>::</listen_host>
+    <http_port>8123</http_port>
+    <tcp_port>9000</tcp_port>
+
+    <!-- Basic logging -->
+    <logger>
+        <level>information</level>
+        <console>true</console>
+    </logger>
+
+    <!-- Memory settings for development -->
+    <max_server_memory_usage_to_ram_ratio>0.8</max_server_memory_usage_to_ram_ratio>
+    <max_concurrent_queries>100</max_concurrent_queries>
+
+    <!-- Single node setup - no clustering -->
+    <macros>
+        <cluster>default</cluster>
+        <shard>01</shard>
+        <replica>replica_1</replica>
+    </macros>
+
+    <!-- Single node remote server config -->
+    <remote_servers>
+        <default>
+            <shard>
+                <internal_replication>false</internal_replication>
+                <replica>
+                    <host>localhost</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </default>
+    </remote_servers>
+</clickhouse>

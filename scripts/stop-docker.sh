@@ -5,15 +5,15 @@ set -e
 
 if [ $# -ne 1 ]; then
     echo "Usage: $0 <environment>"
-    echo "Environments: development, staging, production"
+    echo "Environments: local, development, staging, production"
     exit 1
 fi
 
 ENV=$1
 
 # Validate environment
-if [[ ! "$ENV" =~ ^(development|staging|production)$ ]]; then
-    echo "Invalid environment. Must be one of: development, staging, production"
+if [[ ! "$ENV" =~ ^(local|development|staging|production)$ ]]; then
+    echo "Invalid environment. Must be one of: local, development, staging, production"
     exit 1
 fi
 

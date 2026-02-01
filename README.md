@@ -73,7 +73,7 @@ uv sync
 3. Copy the example environment file:
 
 ```bash
-cp .env.example .env.[development|staging|production] # e.g. .env.development
+cp .env.example .env.[local|development|staging|production] # e.g. .env.local or .env.development
 ```
 
 4. Update the `.env` file with your configuration (see `.env.example` for reference)
@@ -86,7 +86,7 @@ cp .env.example .env.[development|staging|production] # e.g. .env.development
 ```bash
 POSTGRES_HOST=db
 POSTGRES_PORT=5432
-POSTGRES_DB=cool_db
+POSTGRES_DB=salt_gpt
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 ```
@@ -106,7 +106,7 @@ uv sync
 2. Run the application:
 
 ```bash
-make [dev|staging|prod] # e.g. make dev
+make [local|development|staging|production] # e.g. make dev
 ```
 
 1. Go to Swagger UI:
@@ -120,8 +120,8 @@ http://localhost:8000/docs
 1. Build and run with Docker Compose:
 
 ```bash
-make docker-build-env ENV=[development|staging|production] # e.g. make docker-build-env ENV=development
-make docker-run-env ENV=[development|staging|production] # e.g. make docker-run-env ENV=development
+make docker-build-env ENV=[local|development|staging|production] # e.g. make docker-build-env ENV=local
+make docker-run-env ENV=[local|development|staging|production] # e.g. make docker-run-env ENV=local
 ```
 
 2. Access the monitoring stack:
@@ -135,6 +135,14 @@ http://localhost:3000
 Default credentials:
 - Username: admin
 - Password: admin
+
+# Langfuse LLM observability
+http://localhost:3001
+Create admin account on first visit
+
+# ClickHouse analytics DB (for Langfuse)
+http://localhost:8123
+Used internally by Langfuse for analytics
 ```
 
 The Docker setup includes:
@@ -143,11 +151,14 @@ The Docker setup includes:
 - PostgreSQL database
 - Prometheus for metrics collection
 - Grafana for metrics visualization
+- Langfuse for LLM observability and tracing
+- ClickHouse for Langfuse analytics
 - Pre-configured dashboards for:
   - API performance metrics
   - Rate limiting statistics
   - Database performance
   - System resource usage
+  - LLM tracing and analytics
 
 ## 📊 Model Evaluation
 
@@ -159,13 +170,13 @@ You can run evaluations with different options using the provided Makefile comma
 
 ```bash
 # Interactive mode with step-by-step prompts
-make eval [ENV=development|staging|production]
+make eval [ENV=local|development|staging|production]
 
 # Quick mode with default settings (no prompts)
-make eval-quick [ENV=development|staging|production]
+make eval-quick [ENV=local|development|staging|production]
 
 # Evaluation without report generation
-make eval-no-report [ENV=development|staging|production]
+make eval-no-report [ENV=local|development|staging|production]
 ```
 
 ### Evaluation Features
@@ -200,11 +211,86 @@ Each report includes:
 - Per-metric performance metrics
 - Detailed trace-level information for debugging
 
+## 🔍 LLM Observability with Langfuse
+
+The project includes a local Langfuse instance for comprehensive LLM observability, tracing, and analytics.
+
+### Features
+
+- **Trace Management**: Automatic tracing of all LLM interactions
+- **Performance Analytics**: Monitor latency, token usage, and costs
+- **Prompt Management**: Version and manage your prompts
+- **User Analytics**: Track user interactions and feedback
+- **Model Comparison**: Compare different models and configurations
+
+### Quick Start
+
+1. Start Langfuse with the entire stack:
+```bash
+make docker-compose-up ENV=local
+```
+
+2. Or manage Langfuse independently:
+```bash
+# Start Langfuse services
+./langfuse/langfuse.sh start
+
+# Check status
+./langfuse/langfuse.sh status
+
+# View logs
+./langfuse/langfuse.sh logs
+```
+
+3. Access Langfuse at http://localhost:3001:
+   - Create an admin account on first visit
+   - Generate project API keys
+   - Update your `.env.local` with the keys
+
+### Configuration
+
+After setting up Langfuse, update your environment file:
+
+```bash
+LANGFUSE_PUBLIC_KEY=pk_...  # From Langfuse UI
+LANGFUSE_SECRET_KEY=sk_...  # From Langfuse UI
+LANGFUSE_HOST=http://localhost:3001
+```
+
+### Management Commands
+
+```bash
+# Start services
+./langfuse/langfuse.sh start [local|development|staging|production]
+
+# Check status
+./langfuse/langfuse.sh status
+
+# View real-time logs
+./langfuse/langfuse.sh logs
+
+# Restart services
+./langfuse/langfuse.sh restart
+
+# Reset all data (⚠️ DANGEROUS)
+./langfuse/langfuse.sh reset
+
+# Stop services
+./langfuse/langfuse.sh stop
+```
+
+### Port Configuration
+
+- **Langfuse UI**: http://localhost:3001
+- **Langfuse Database**: localhost:5433 (separate from main app database)
+- **ClickHouse**: http://localhost:8123 (HTTP), localhost:9000 (TCP)
+
 ## 🔧 Configuration
 
 The application uses a flexible configuration system with environment-specific settings:
 
-- `.env.development` - Local development settings
+- `.env.local` - Local development settings (default)
+- `.env.development` - Development environment settings
 - `.env.staging` - Staging environment settings
 - `.env.production` - Production environment settings
 
@@ -214,14 +300,14 @@ Key configuration variables include:
 
 ```bash
 # Application
-APP_ENV=development
+APP_ENV=local
 PROJECT_NAME="FastAPI LangGraph Agent"
 DEBUG=true
 
 # Database
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
-POSTGRES_DB=mydb
+POSTGRES_DB=salt_gpt
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 

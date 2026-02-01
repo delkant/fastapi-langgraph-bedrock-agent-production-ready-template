@@ -25,9 +25,10 @@ class Environment(str, Enum):
     """Application environment types.
 
     Defines the possible environments the application can run in:
-    development, staging, production, and test.
+    local, development, staging, production, and test.
     """
 
+    LOCAL = "local"
     DEVELOPMENT = "development"
     STAGING = "staging"
     PRODUCTION = "production"
@@ -39,17 +40,21 @@ def get_environment() -> Environment:
     """Get the current environment.
 
     Returns:
-        Environment: The current environment (development, staging, production, or test)
+        Environment: The current environment (local, development, staging, production, or test)
     """
-    match os.getenv("APP_ENV", "development").lower():
+    match os.getenv("APP_ENV", "local").lower():
         case "production" | "prod":
             return Environment.PRODUCTION
         case "staging" | "stage":
             return Environment.STAGING
         case "test":
             return Environment.TEST
-        case _:
+        case "development" | "dev":
             return Environment.DEVELOPMENT
+        case "local":
+            return Environment.LOCAL
+        case _:
+            return Environment.LOCAL
 
 
 # Load appropriate .env file based on environment
@@ -147,16 +152,45 @@ class Settings:
         self.LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")
         self.LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
-        # LangGraph Configuration
+        # LLM Provider Configuration
+        self.LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()  # "openai" or "bedrock"
+
+        # OpenAI Configuration
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-        self.DEFAULT_LLM_MODEL = os.getenv("DEFAULT_LLM_MODEL", "gpt-5-mini")
+
+        # AWS Bedrock Configuration - supports both access keys and bearer tokens
+        self.AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
+        self.AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+        self.AWS_BEARER_TOKEN_BEDROCK = os.getenv("AWS_BEARER_TOKEN_BEDROCK", "")
+        self.AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+
+        # LLM Configuration (provider-agnostic)
+        if self.LLM_PROVIDER == "bedrock":
+            self.DEFAULT_LLM_MODEL = os.getenv("DEFAULT_LLM_MODEL", "anthropic.claude-3-sonnet-20240229-v1:0")
+            default_available_models = "anthropic.claude-3-sonnet-20240229-v1:0,anthropic.claude-3-haiku-20240307-v1:0"
+        else:
+            self.DEFAULT_LLM_MODEL = os.getenv("DEFAULT_LLM_MODEL", "gpt-4o-mini")
+            default_available_models = "gpt-4o,gpt-4o-mini"
+
+        # Parse available models from environment
+        self.AVAILABLE_LLM_MODELS = parse_list_from_env("AVAILABLE_LLM_MODELS", default_available_models.split(","))
+
         self.DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", "0.2"))
         self.MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2000"))
         self.MAX_LLM_CALL_RETRIES = int(os.getenv("MAX_LLM_CALL_RETRIES", "3"))
 
         # Long term memory Configuration
-        self.LONG_TERM_MEMORY_MODEL = os.getenv("LONG_TERM_MEMORY_MODEL", "gpt-5-nano")
-        self.LONG_TERM_MEMORY_EMBEDDER_MODEL = os.getenv("LONG_TERM_MEMORY_EMBEDDER_MODEL", "text-embedding-3-small")
+        if self.LLM_PROVIDER == "bedrock":
+            self.LONG_TERM_MEMORY_MODEL = os.getenv("LONG_TERM_MEMORY_MODEL", "anthropic.claude-3-haiku-20240307-v1:0")
+            self.LONG_TERM_MEMORY_EMBEDDER_MODEL = os.getenv("LONG_TERM_MEMORY_EMBEDDER_MODEL", "amazon.titan-embed-text-v1")
+        else:
+            self.LONG_TERM_MEMORY_MODEL = os.getenv("LONG_TERM_MEMORY_MODEL", "gpt-4o-mini")
+            self.LONG_TERM_MEMORY_EMBEDDER_MODEL = os.getenv("LONG_TERM_MEMORY_EMBEDDER_MODEL", "text-embedding-3-small")
+
+        # Fallback OpenAI models for memory (configurable)
+        self.LONG_TERM_MEMORY_OPENAI_MODEL = os.getenv("LONG_TERM_MEMORY_OPENAI_MODEL", "gpt-4o-mini")
+        self.LONG_TERM_MEMORY_OPENAI_EMBEDDER = os.getenv("LONG_TERM_MEMORY_OPENAI_EMBEDDER", "text-embedding-3-small")
+
         self.LONG_TERM_MEMORY_COLLECTION_NAME = os.getenv("LONG_TERM_MEMORY_COLLECTION_NAME", "longterm_memory")
         # JWT Configuration
         self.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
@@ -171,7 +205,7 @@ class Settings:
         # Postgres Configuration
         self.POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
         self.POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
-        self.POSTGRES_DB = os.getenv("POSTGRES_DB", "food_order_db")
+        self.POSTGRES_DB = os.getenv("POSTGRES_DB", "salt_gpt")
         self.POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
         self.POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
         self.POSTGRES_POOL_SIZE = int(os.getenv("POSTGRES_POOL_SIZE", "20"))
@@ -201,9 +235,14 @@ class Settings:
                 self.RATE_LIMIT_ENDPOINTS[endpoint] = value
 
         # Evaluation Configuration
-        self.EVALUATION_LLM = os.getenv("EVALUATION_LLM", "gpt-5")
-        self.EVALUATION_BASE_URL = os.getenv("EVALUATION_BASE_URL", "https://api.openai.com/v1")
-        self.EVALUATION_API_KEY = os.getenv("EVALUATION_API_KEY", self.OPENAI_API_KEY)
+        if self.LLM_PROVIDER == "bedrock":
+            self.EVALUATION_LLM = os.getenv("EVALUATION_LLM", "anthropic.claude-3-sonnet-20240229-v1:0")
+            self.EVALUATION_BASE_URL = os.getenv("EVALUATION_BASE_URL", "")  # Not used for Bedrock
+            self.EVALUATION_API_KEY = os.getenv("EVALUATION_API_KEY", "")  # Not used for Bedrock
+        else:
+            self.EVALUATION_LLM = os.getenv("EVALUATION_LLM", "gpt-4o")
+            self.EVALUATION_BASE_URL = os.getenv("EVALUATION_BASE_URL", "https://api.openai.com/v1")
+            self.EVALUATION_API_KEY = os.getenv("EVALUATION_API_KEY", self.OPENAI_API_KEY)
         self.EVALUATION_SLEEP_TIME = int(os.getenv("EVALUATION_SLEEP_TIME", "10"))
 
         # Apply environment-specific settings
@@ -212,6 +251,12 @@ class Settings:
     def apply_environment_settings(self):
         """Apply environment-specific settings based on the current environment."""
         env_settings = {
+            Environment.LOCAL: {
+                "DEBUG": True,
+                "LOG_LEVEL": "DEBUG",
+                "LOG_FORMAT": "console",
+                "RATE_LIMIT_DEFAULT": ["1000 per day", "200 per hour"],
+            },
             Environment.DEVELOPMENT: {
                 "DEBUG": True,
                 "LOG_LEVEL": "DEBUG",

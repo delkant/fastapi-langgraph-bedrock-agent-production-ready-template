@@ -75,6 +75,28 @@ class LangGraphAgent:
     async def _long_term_memory(self) -> AsyncMemory:
         """Initialize the long term memory."""
         if self.memory is None:
+            # Configure providers based on LLM_PROVIDER setting
+            if settings.LLM_PROVIDER == "bedrock":
+                # For now, fallback to OpenAI for memory until mem0ai Bedrock support is stable
+                # TODO: Revisit when mem0ai has better Bedrock embeddings support
+                llm_config = {
+                    "provider": "openai",
+                    "config": {"model": settings.LONG_TERM_MEMORY_OPENAI_MODEL}
+                }
+                embedder_config = {
+                    "provider": "openai",
+                    "config": {"model": settings.LONG_TERM_MEMORY_OPENAI_EMBEDDER}
+                }
+            else:
+                llm_config = {
+                    "provider": "openai",
+                    "config": {"model": settings.LONG_TERM_MEMORY_MODEL}
+                }
+                embedder_config = {
+                    "provider": "openai",
+                    "config": {"model": settings.LONG_TERM_MEMORY_EMBEDDER_MODEL}
+                }
+
             self.memory = await AsyncMemory.from_config(
                 config_dict={
                     "vector_store": {
@@ -88,11 +110,8 @@ class LangGraphAgent:
                             "port": settings.POSTGRES_PORT,
                         },
                     },
-                    "llm": {
-                        "provider": "openai",
-                        "config": {"model": settings.LONG_TERM_MEMORY_MODEL},
-                    },
-                    "embedder": {"provider": "openai", "config": {"model": settings.LONG_TERM_MEMORY_EMBEDDER_MODEL}},
+                    "llm": llm_config,
+                    "embedder": embedder_config,
                     # "custom_fact_extraction_prompt": load_custom_fact_extraction_prompt(),
                 }
             )
@@ -147,13 +166,18 @@ class LangGraphAgent:
             str: The relevant memory.
         """
         try:
+            # Temporarily disable long-term memory for Bedrock to avoid configuration complexity
+            if settings.LLM_PROVIDER == "bedrock":
+                logger.info("long_term_memory_disabled_for_bedrock", user_id=user_id)
+                return "No relevant memory found."
+
             memory = await self._long_term_memory()
             results = await memory.search(user_id=str(user_id), query=query)
             print(results)
             return "\n".join([f"* {result['memory']}" for result in results["results"]])
         except Exception as e:
             logger.error("failed_to_get_relevant_memory", error=str(e), user_id=user_id, query=query)
-            return ""
+            return "No relevant memory found."
 
     async def _update_long_term_memory(self, user_id: str, messages: list[dict], metadata: dict = None) -> None:
         """Update the long term memory.

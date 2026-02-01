@@ -48,10 +48,27 @@ else
     echo "Warning: No .env file found. Using system environment variables."
 fi
 
-# Check required sensitive environment variables
-required_vars=("JWT_SECRET_KEY" "OPENAI_API_KEY")
+# Check required sensitive environment variables based on LLM provider
+required_vars=("JWT_SECRET_KEY")
 missing_vars=()
 
+# Check LLM provider and require appropriate keys
+LLM_PROVIDER=${LLM_PROVIDER:-openai}  # Default to openai for backward compatibility
+
+if [[ "$LLM_PROVIDER" == "bedrock" ]]; then
+    # For Bedrock, require AWS credentials (either access keys or bearer token)
+    if [[ -z "${AWS_ACCESS_KEY_ID}" && -z "${AWS_BEARER_TOKEN_BEDROCK}" ]]; then
+        missing_vars+=("AWS_ACCESS_KEY_ID or AWS_BEARER_TOKEN_BEDROCK")
+    fi
+    if [[ -n "${AWS_ACCESS_KEY_ID}" && -z "${AWS_SECRET_ACCESS_KEY}" ]]; then
+        missing_vars+=("AWS_SECRET_ACCESS_KEY")
+    fi
+else
+    # For OpenAI or other providers, require OpenAI API key
+    required_vars+=("OPENAI_API_KEY")
+fi
+
+# Check all required variables
 for var in "${required_vars[@]}"; do
     if [[ -z "${!var}" ]]; then
         missing_vars+=("$var")

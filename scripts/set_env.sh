@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # Script to set and manage environment configuration
-# Usage: source ./scripts/set_env.sh [development|staging|production]
+# Usage: source ./scripts/set_env.sh [local|development|staging|production]
 
 # Check if the script is being sourced
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo "Error: This script must be sourced, not executed."
-    echo "Usage: source ./scripts/set_env.sh [development|staging|production]"
+    echo "Usage: source ./scripts/set_env.sh [local|development|staging|production]"
     exit 1
 fi
 
@@ -18,11 +18,11 @@ PURPLE='\033[0;35m'
 NC='\033[0m' # No Color
 
 # Default environment is development
-ENV=${1:-development}
+ENV=${1:-local}
 
 # Validate environment
-if [[ ! "$ENV" =~ ^(development|staging|production)$ ]]; then
-    echo -e "${RED}Error: Invalid environment. Choose development, staging, or production.${NC}"
+if [[ ! "$ENV" =~ ^(local|development|staging|production)$ ]]; then
+    echo -e "${RED}Error: Invalid environment. Choose local, development, staging, or production.${NC}"
     return 1
 fi
 
@@ -108,10 +108,12 @@ echo -e "\n${GREEN}Available commands:${NC}"
 echo -e "  ${YELLOW}start_app${NC} - Start the application in $ENV environment"
 
 # Create aliases for environments
+alias local_env="source '$SCRIPT_DIR/set_env.sh' local"
 alias dev_env="source '$SCRIPT_DIR/set_env.sh' development"
 alias stage_env="source '$SCRIPT_DIR/set_env.sh' staging"
 alias prod_env="source '$SCRIPT_DIR/set_env.sh' production"
 
+echo -e "  ${YELLOW}local_env${NC} - Switch to local environment"
 echo -e "  ${YELLOW}dev_env${NC} - Switch to development environment"
 echo -e "  ${YELLOW}stage_env${NC} - Switch to staging environment"
 echo -e "  ${YELLOW}prod_env${NC} - Switch to production environment"
