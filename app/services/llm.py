@@ -209,7 +209,7 @@ class LLMRegistry:
 
         if not available_models:
             logger.warning("No available models configured, using defaults")
-            if settings.LLM_PROVIDER == "bedrock":
+            if settings.LLM_PROVIDER == "aws_bedrock":
                 available_models = ["anthropic.claude-3-sonnet-20240229-v1:0"]
             else:
                 available_models = ["gpt-4o-mini"]
@@ -217,7 +217,7 @@ class LLMRegistry:
         models = []
         for model_id in available_models:
             try:
-                if settings.LLM_PROVIDER == "bedrock":
+                if settings.LLM_PROVIDER == "aws_bedrock":
                     models.append(LLMRegistry._create_bedrock_model(model_id))
                 else:
                     models.append(LLMRegistry._create_openai_model(model_id))
@@ -274,7 +274,7 @@ class LLMRegistry:
         if kwargs:
             logger.debug("creating_llm_with_custom_args", model_name=model_name, custom_args=list(kwargs.keys()))
 
-            if settings.LLM_PROVIDER == "bedrock":
+            if settings.LLM_PROVIDER == "aws_bedrock":
                 aws_session = cls._get_bedrock_credentials()
                 return ChatBedrock(
                     model_id=model_name,
@@ -409,7 +409,7 @@ class LLMService:
 
     def _get_retry_exceptions(self):
         """Get the appropriate exception types for retry based on provider."""
-        if settings.LLM_PROVIDER == "bedrock":
+        if settings.LLM_PROVIDER == "aws_bedrock":
             return (ClientError, BotoCoreError)
         else:
             return (RateLimitError, APITimeoutError, APIError)

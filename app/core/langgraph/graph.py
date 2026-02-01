@@ -147,11 +147,6 @@ class LangGraphAgent:
             str: The relevant memory.
         """
         try:
-            # Temporarily disable long-term memory for Bedrock to avoid configuration complexity
-            if settings.LLM_PROVIDER == "bedrock":
-                logger.info("long_term_memory_disabled_for_bedrock", user_id=user_id)
-                return "No relevant memory found."
-
             memory = await self._long_term_memory()
             results = await memory.search(user_id=str(user_id), query=query)
             print(results)

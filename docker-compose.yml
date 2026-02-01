@@ -34,6 +34,7 @@ services:
     environment:
       - APP_ENV=${APP_ENV:-development}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-supersecretkeythatshouldbechangedforproduction}
+      - LLM_PROVIDER=${LLM_PROVIDER:-aws_bedrock}
     depends_on:
       db:
         condition: service_healthy
@@ -157,7 +158,7 @@ services:
       - LANGFUSE_CLICKHOUSE_SINGLE_NODE=${LANGFUSE_CLICKHOUSE_SINGLE_NODE:-true}
 
       # Authentication
-      - NEXTAUTH_URL=http://localhost:3001
+      - NEXTAUTH_URL=http://host.docker.internal:3001
       - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET:-langfuse_local_secret_for_development_only}
 
       # Salt for hashing

@@ -55,7 +55,7 @@ missing_vars=()
 # Check LLM provider and require appropriate keys
 LLM_PROVIDER=${LLM_PROVIDER:-openai}  # Default to openai for backward compatibility
 
-if [[ "$LLM_PROVIDER" == "bedrock" ]]; then
+if [[ "$LLM_PROVIDER" == "aws_bedrock" ]]; then
     # For Bedrock, require AWS credentials (either access keys or bearer token)
     if [[ -z "${AWS_ACCESS_KEY_ID}" && -z "${AWS_BEARER_TOKEN_BEDROCK}" ]]; then
         missing_vars+=("AWS_ACCESS_KEY_ID or AWS_BEARER_TOKEN_BEDROCK")

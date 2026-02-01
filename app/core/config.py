@@ -153,7 +153,7 @@ class Settings:
         self.LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
         # LLM Provider Configuration
-        self.LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()  # "openai" or "bedrock"
+        self.LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()  # "openai" or "aws_bedrock"
 
         # OpenAI Configuration
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -165,7 +165,7 @@ class Settings:
         self.AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 
         # LLM Configuration (provider-agnostic)
-        if self.LLM_PROVIDER == "bedrock":
+        if self.LLM_PROVIDER == "aws_bedrock":
             self.DEFAULT_LLM_MODEL = os.getenv("DEFAULT_LLM_MODEL", "anthropic.claude-3-sonnet-20240229-v1:0")
             default_available_models = "anthropic.claude-3-sonnet-20240229-v1:0,anthropic.claude-3-haiku-20240307-v1:0"
         else:
@@ -180,7 +180,7 @@ class Settings:
         self.MAX_LLM_CALL_RETRIES = int(os.getenv("MAX_LLM_CALL_RETRIES", "3"))
 
         # Long term memory Configuration
-        if self.LLM_PROVIDER == "bedrock":
+        if self.LLM_PROVIDER == "aws_bedrock":
             self.LONG_TERM_MEMORY_MODEL = os.getenv("LONG_TERM_MEMORY_MODEL", "anthropic.claude-3-haiku-20240307-v1:0")
             self.LONG_TERM_MEMORY_EMBEDDER_MODEL = os.getenv("LONG_TERM_MEMORY_EMBEDDER_MODEL", "amazon.titan-embed-text-v1")
         else:
@@ -235,7 +235,7 @@ class Settings:
                 self.RATE_LIMIT_ENDPOINTS[endpoint] = value
 
         # Evaluation Configuration
-        if self.LLM_PROVIDER == "bedrock":
+        if self.LLM_PROVIDER == "aws_bedrock":
             self.EVALUATION_LLM = os.getenv("EVALUATION_LLM", "anthropic.claude-3-sonnet-20240229-v1:0")
             self.EVALUATION_BASE_URL = os.getenv("EVALUATION_BASE_URL", "")  # Not used for Bedrock
             self.EVALUATION_API_KEY = os.getenv("EVALUATION_API_KEY", "")  # Not used for Bedrock
