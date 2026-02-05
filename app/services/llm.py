@@ -9,6 +9,7 @@ from typing import (
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
+from langchain_core.runnables import RunnableConfig
 from tenacity import (
     before_sleep_log,
     retry,
@@ -421,11 +422,12 @@ class LLMService:
         before_sleep=before_sleep_log(logger, "WARNING"),
         reraise=True,
     )
-    async def _call_llm_with_retry(self, messages: List[BaseMessage]) -> BaseMessage:
+    async def _call_llm_with_retry(self, messages: List[BaseMessage], callbacks: Optional[List] = None) -> BaseMessage:
         """Call the LLM with automatic retry logic.
 
         Args:
             messages: List of messages to send to the LLM
+            callbacks: Optional list of callbacks for tracing and monitoring
 
         Returns:
             BaseMessage response from the LLM
@@ -437,7 +439,9 @@ class LLMService:
             raise RuntimeError("llm not initialized")
 
         try:
-            response = await self._llm.ainvoke(messages)
+            # Create config with callbacks if provided
+            config = RunnableConfig(callbacks=callbacks) if callbacks else None
+            response = await self._llm.ainvoke(messages, config=config)
             logger.debug("llm_call_successful", message_count=len(messages), provider=settings.LLM_PROVIDER)
             return response
         except Exception as e:
@@ -465,6 +469,7 @@ class LLMService:
         self,
         messages: List[BaseMessage],
         model_name: Optional[str] = None,
+        callbacks: Optional[List] = None,
         **model_kwargs,
     ) -> BaseMessage:
         """Call the LLM with the specified messages and circular fallback.
@@ -472,6 +477,7 @@ class LLMService:
         Args:
             messages: List of messages to send to the LLM
             model_name: Optional specific model to use. If None, uses current model.
+            callbacks: Optional list of callbacks (e.g., Langfuse CallbackHandler) for tracing
             **model_kwargs: Optional kwargs to override default model configuration
 
         Returns:
@@ -503,7 +509,7 @@ class LLMService:
 
         while models_tried < total_models:
             try:
-                response = await self._call_llm_with_retry(messages)
+                response = await self._call_llm_with_retry(messages, callbacks=callbacks)
                 return response
             except Exception as e:
                 last_error = e

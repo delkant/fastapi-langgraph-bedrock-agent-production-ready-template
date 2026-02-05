@@ -96,6 +96,9 @@ echo "Database User: $( [[ -n ${POSTGRES_USER:-${DB_USER:-}} ]] && echo 'set' ||
 echo "LLM Model: ${DEFAULT_LLM_MODEL:-Not set}"
 echo "Debug Mode: ${DEBUG:-false}"
 
+# Create logs directory if it doesn't exist
+mkdir -p /app/logs
+
 # Run database migrations if necessary
 # e.g., alembic upgrade head
 

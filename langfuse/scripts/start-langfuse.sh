@@ -66,7 +66,7 @@ fi
 
 echo -e "${BLUE}🎉 Langfuse services started successfully!${NC}"
 echo -e "${GREEN}📊 Access Langfuse at: http://localhost:3001${NC}"
-echo -e "${GREEN}🗄️  Database is running on: localhost:5433${NC}"
+echo -e "${GREEN}🗄️  Database is running on: localhost:5344${NC}"
 
 echo -e "\n${YELLOW}📝 Next steps:${NC}"
 echo -e "1. Open http://localhost:3001 in your browser"

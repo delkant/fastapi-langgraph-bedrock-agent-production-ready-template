@@ -86,7 +86,7 @@ fi
 
 echo -e "\n${YELLOW}🌐 Port Connectivity:${NC}"
 # Check port accessibility
-check_port 5433 "Langfuse Database"
+check_port 5344 "Langfuse Database"
 check_port 3001 "Langfuse Web UI"
 
 echo -e "\n${YELLOW}🔌 HTTP Endpoints:${NC}"

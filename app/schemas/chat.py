@@ -4,6 +4,9 @@ import re
 from typing import (
     List,
     Literal,
+    Optional,
+    Any,
+    Dict,
 )
 
 from pydantic import (
@@ -85,3 +88,39 @@ class StreamResponse(BaseModel):
 
     content: str = Field(default="", description="The content of the current chunk")
     done: bool = Field(default=False, description="Whether the stream is complete")
+
+
+class CopilotEvent(BaseModel):
+    """CopilotKit-compatible streaming event model.
+
+    Event types:
+    - assistant_token: Streaming text tokens from the assistant
+    - tool_call_start: Tool execution begins
+    - tool_call_end: Tool execution completes
+    - final: Stream completion
+    - error: Error occurred during processing
+    """
+
+    event_type: Literal["assistant_token", "tool_call_start", "tool_call_end", "final", "error"] = Field(
+        ..., description="The type of streaming event"
+    )
+    content: Optional[str] = Field(default="", description="The content/message for this event")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional event metadata")
+
+
+class ToolCallStartEvent(BaseModel):
+    """Tool call start event details."""
+
+    tool_name: str = Field(..., description="Name of the tool being called")
+    tool_input: Dict[str, Any] = Field(..., description="Input parameters for the tool")
+    tool_call_id: Optional[str] = Field(default=None, description="Unique identifier for this tool call")
+
+
+class ToolCallEndEvent(BaseModel):
+    """Tool call end event details."""
+
+    tool_name: str = Field(..., description="Name of the tool that was called")
+    tool_output: Any = Field(..., description="Output/result from the tool")
+    tool_call_id: Optional[str] = Field(default=None, description="Unique identifier for this tool call")
+    success: bool = Field(default=True, description="Whether the tool call was successful")
+    error_message: Optional[str] = Field(default=None, description="Error message if tool call failed")

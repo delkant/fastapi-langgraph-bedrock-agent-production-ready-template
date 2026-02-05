@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Database configuration
 DB_HOST=${LANGFUSE_DB_HOST:-localhost}
-DB_PORT=${LANGFUSE_DB_PORT:-5433}
+DB_PORT=${LANGFUSE_DB_PORT:-5344}
 DB_NAME=${LANGFUSE_DB_NAME:-langfuse}
 DB_USER=${LANGFUSE_DB_USER:-langfuse}
 DB_PASSWORD=${LANGFUSE_DB_PASSWORD:-langfuse_password}

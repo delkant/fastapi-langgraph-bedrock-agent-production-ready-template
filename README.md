@@ -282,7 +282,7 @@ LANGFUSE_HOST=http://localhost:3001
 ### Port Configuration
 
 - **Langfuse UI**: http://localhost:3001
-- **Langfuse Database**: localhost:5433 (separate from main app database)
+- **Langfuse Database**: localhost:5344 (separate from main app database)
 - **ClickHouse**: http://localhost:8123 (HTTP), localhost:9000 (TCP)
 
 ## 🔧 Configuration

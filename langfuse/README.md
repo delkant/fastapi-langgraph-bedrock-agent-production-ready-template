@@ -7,7 +7,7 @@ This directory contains the Docker configuration for running Langfuse locally al
 Langfuse is an open-source LLM engineering platform for tracing, evaluation, prompt management, and analytics. This setup provides:
 
 - **Langfuse Server**: Web interface and API running on port 3001
-- **Dedicated PostgreSQL**: Separate database for Langfuse data on port 5433
+- **Dedicated PostgreSQL**: Separate database for Langfuse data on port 5344
 - **Environment-specific configurations**: Support for local, development, staging, and production
 
 ## Quick Start
@@ -63,7 +63,7 @@ LANGFUSE_HOST=http://localhost:3001
 ### Port Configuration
 
 - **Langfuse Web UI**: 3001 (avoids collision with Grafana on 3000)
-- **Langfuse Database**: 5433 (avoids collision with main PostgreSQL on 5432)
+- **Langfuse Database**: 5344 (avoids collision with main PostgreSQL on 5432)
 
 ### Database
 
