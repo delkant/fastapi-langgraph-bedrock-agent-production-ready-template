@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -36,6 +34,7 @@ services:
     environment:
       - APP_ENV=${APP_ENV:-development}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-supersecretkeythatshouldbechangedforproduction}
+      - LLM_PROVIDER=${LLM_PROVIDER:-aws_bedrock}
     depends_on:
       db:
         condition: service_healthy
@@ -70,7 +69,7 @@ services:
     volumes:
       - grafana-storage:/var/lib/grafana
       - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./grafana/dashboards/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
@@ -91,6 +90,219 @@ services:
       - monitoring
     restart: always
 
+  # ClickHouse for Langfuse Analytics
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    ports:
+      - "8123:8123"  # HTTP interface
+      - "9000:9000"   # Native TCP interface
+    environment:
+      - CLICKHOUSE_DB=langfuse
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-langfuse}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-langfuse_password}
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./langfuse/clickhouse-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - monitoring
+    restart: always
+
+  # Langfuse Database
+  langfuse-db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=langfuse
+      - POSTGRES_USER=langfuse
+      - POSTGRES_PASSWORD=${LANGFUSE_DB_PASSWORD:-langfuse_dev_password}
+    ports:
+      - "5344:5432"  # Use different port to avoid collision with main postgres
+    volumes:
+      - langfuse-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - monitoring
+    restart: always
+
+  # MinIO (S3-compatible storage for Langfuse 3.x)
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9100:9000"   # S3 API (avoiding other service conflicts)
+      - "9101:9001"   # MinIO Console
+    environment:
+      - MINIO_ROOT_USER=minio
+      - MINIO_ROOT_PASSWORD=miniosecret
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - monitoring
+    restart: always
+
+  # MinIO Client - Creates required buckets for Langfuse
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set minio http://minio:9000 minio miniosecret;
+      mc mb minio/langfuse || echo 'Bucket already exists';
+      mc policy set public minio/langfuse;
+      echo 'MinIO setup complete';
+      "
+    networks:
+      - monitoring
+    restart: "no"
+
+  # ✅ ADD: Redis (required for Langfuse queue + OTEL ingestion queue)
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    networks:
+      - monitoring
+    restart: always
+
+  # ✅ CHANGE: Langfuse Server -> split into web + worker
+  langfuse-web:
+    image: langfuse/langfuse:3
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "3001:3000"  # Use port 3001 to avoid collision with Grafana
+    environment:
+      # Database connection (align with langfuse-db password env)
+      - DATABASE_URL=postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse_dev_password}@langfuse-db:5432/langfuse
+
+      # ClickHouse connection (same as your original)
+      - CLICKHOUSE_URL=http://clickhouse:8123
+      - CLICKHOUSE_MIGRATION_URL=clickhouse://clickhouse:9000
+      - CLICKHOUSE_USER=langfuse
+      - CLICKHOUSE_PASSWORD=langfuse_password
+
+      # ✅ ADD: Redis connection string (required)
+      - REDIS_CONNECTION_STRING=redis://redis:6379
+
+      # Authentication (same as your original)
+      - NEXTAUTH_URL=http://host.docker.internal:3001
+      - NEXTAUTH_SECRET=mysecret_change_in_production
+
+      # Salt for hashing (same)
+      - SALT=mysalt_change_in_production
+
+      # S3 configuration (same as your original)
+      - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_EVENT_UPLOAD_REGION=auto
+      - LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=minio
+      - LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=miniosecret
+      - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_EVENT_UPLOAD_PREFIX=events/
+      - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_MEDIA_UPLOAD_REGION=auto
+      - LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID=minio
+      - LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=miniosecret
+      - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=media/
+
+      # Basic configuration (same)
+      - TELEMETRY_ENABLED=false
+      - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=true
+      - OTEL_SDK_DISABLED=true
+
+      # Auto-initialize (same)
+      - LANGFUSE_INIT_ORG_ID=default-org
+      - LANGFUSE_INIT_ORG_NAME=Default Organization
+      - LANGFUSE_INIT_PROJECT_ID=default-project
+      - LANGFUSE_INIT_PROJECT_NAME=Default Project
+      - LANGFUSE_INIT_PROJECT_PUBLIC_KEY=pk-lf-f7622669-4c32-49e0-a98c-bde23b5fc18e
+      - LANGFUSE_INIT_PROJECT_SECRET_KEY=sk-lf-e8fb3b5d-baf5-4e22-a7bb-324c8b2bd89b
+      - LANGFUSE_INIT_USER_EMAIL=admin@localhost.dev
+      - LANGFUSE_INIT_USER_NAME=Admin User
+      - LANGFUSE_INIT_USER_PASSWORD=admin123
+    volumes:
+      - ./langfuse/config:/app/config:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/public/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+    restart: always
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      # Must match web for DB + ClickHouse + Redis + S3
+      - DATABASE_URL=postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse_dev_password}@langfuse-db:5432/langfuse
+
+      - CLICKHOUSE_URL=http://clickhouse:8123
+      - CLICKHOUSE_MIGRATION_URL=clickhouse://clickhouse:9000
+      - CLICKHOUSE_USER=langfuse
+      - CLICKHOUSE_PASSWORD=langfuse_password
+
+      - REDIS_CONNECTION_STRING=redis://redis:6379
+
+      - SALT=mysalt_change_in_production
+
+      - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_EVENT_UPLOAD_REGION=auto
+      - LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=minio
+      - LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=miniosecret
+      - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_EVENT_UPLOAD_PREFIX=events/
+      - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_MEDIA_UPLOAD_REGION=auto
+      - LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID=minio
+      - LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=miniosecret
+      - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=media/
+
+      - TELEMETRY_ENABLED=false
+      - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=true
+      - OTEL_SDK_DISABLED=true
+    networks:
+      - monitoring
+    restart: always
 
 networks:
   monitoring:
@@ -99,3 +311,6 @@ networks:
 volumes:
   grafana-storage:
   postgres-data:
+  langfuse-postgres-data:
+  clickhouse-data:
+  minio-data:

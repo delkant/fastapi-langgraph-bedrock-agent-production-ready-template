@@ -14,6 +14,7 @@ from langchain_core.messages import (
     convert_to_openai_messages,
 )
 from langfuse.langchain import CallbackHandler
+import os
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import (
     END,
@@ -72,6 +73,12 @@ class LangGraphAgent:
             environment=settings.ENVIRONMENT.value,
         )
 
+    def _get_langfuse_callback(self) -> CallbackHandler:
+        """Get properly configured Langfuse callback handler."""
+        # CallbackHandler reads from environment variables automatically
+        # LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST
+        return CallbackHandler()
+
     async def _long_term_memory(self) -> AsyncMemory:
         """Initialize the long term memory."""
         if self.memory is None:
@@ -89,10 +96,10 @@ class LangGraphAgent:
                         },
                     },
                     "llm": {
-                        "provider": "openai",
-                        "config": {"model": settings.LONG_TERM_MEMORY_MODEL},
+                        "provider": settings.LLM_PROVIDER,
+                        "config": {"model": settings.LONG_TERM_MEMORY_MODEL}
                     },
-                    "embedder": {"provider": "openai", "config": {"model": settings.LONG_TERM_MEMORY_EMBEDDER_MODEL}},
+                    "embedder": {"provider": settings.LLM_PROVIDER, "config": {"model": settings.LONG_TERM_MEMORY_EMBEDDER_MODEL}},
                     # "custom_fact_extraction_prompt": load_custom_fact_extraction_prompt(),
                 }
             )
@@ -153,7 +160,7 @@ class LangGraphAgent:
             return "\n".join([f"* {result['memory']}" for result in results["results"]])
         except Exception as e:
             logger.error("failed_to_get_relevant_memory", error=str(e), user_id=user_id, query=query)
-            return ""
+            return "No relevant memory found."
 
     async def _update_long_term_memory(self, user_id: str, messages: list[dict], metadata: dict = None) -> None:
         """Update the long term memory.
@@ -197,9 +204,12 @@ class LangGraphAgent:
         messages = prepare_messages(state.messages, current_llm, SYSTEM_PROMPT)
 
         try:
+            # Extract callbacks from config for Langfuse tracing
+            callbacks = config.get("callbacks", []) if config else []
+
             # Use LLM service with automatic retries and circular fallback
             with llm_inference_duration_seconds.labels(model=model_name).time():
-                response_message = await self.llm_service.call(dump_messages(messages))
+                response_message = await self.llm_service.call(dump_messages(messages), callbacks=callbacks)
 
             # Process response to handle structured content blocks
             response_message = process_llm_response(response_message)
@@ -314,7 +324,7 @@ class LangGraphAgent:
             self._graph = await self.create_graph()
         config = {
             "configurable": {"thread_id": session_id},
-            "callbacks": [CallbackHandler()],
+            "callbacks": [self._get_langfuse_callback()],
             "metadata": {
                 "user_id": user_id,
                 "session_id": session_id,
@@ -355,11 +365,7 @@ class LangGraphAgent:
         """
         config = {
             "configurable": {"thread_id": session_id},
-            "callbacks": [
-                CallbackHandler(
-                    environment=settings.ENVIRONMENT.value, debug=False, user_id=user_id, session_id=session_id
-                )
-            ],
+            "callbacks": [self._get_langfuse_callback()],
             "metadata": {
                 "user_id": user_id,
                 "session_id": session_id,
@@ -397,6 +403,103 @@ class LangGraphAgent:
                 )
         except Exception as stream_error:
             logger.error("Error in stream processing", error=str(stream_error), session_id=session_id)
+
+    async def get_copilot_stream_events(
+        self, messages: list[Message], session_id: str, user_id: Optional[str] = None
+    ) -> AsyncGenerator["CopilotEvent", None]:
+        """Get CopilotKit-compatible streaming events from the LLM.
+
+        This method provides structured streaming events compatible with CopilotKit,
+        including tool call start/end events and assistant token streaming.
+
+        Args:
+            messages (list[Message]): The messages to send to the LLM.
+            session_id (str): The session ID for the conversation.
+            user_id (Optional[str]): The user ID for the conversation.
+
+        Yields:
+            CopilotEvent: Structured streaming events for CopilotKit.
+        """
+        from app.schemas.chat import CopilotEvent, ToolCallStartEvent, ToolCallEndEvent
+
+        config = {
+            "configurable": {"thread_id": session_id},
+            "callbacks": [self._get_langfuse_callback()],
+            "metadata": {
+                "user_id": user_id,
+                "session_id": session_id,
+                "environment": settings.ENVIRONMENT.value,
+                "debug": settings.DEBUG,
+            },
+        }
+
+        if self._graph is None:
+            self._graph = await self.create_graph()
+
+        relevant_memory = (
+            await self._get_relevant_memory(user_id, messages[-1].content)
+        ) or "No relevant memory found."
+
+        try:
+            logger.info("Starting copilot stream events", session_id=session_id)
+
+            # Use the same streaming mode as the working original method
+            token_count = 0
+            async for token, _ in self._graph.astream(
+                {"messages": dump_messages(messages), "long_term_memory": relevant_memory},
+                config,
+                stream_mode="messages",
+            ):
+                try:
+                    token_count += 1
+
+                    # Extract text content from token structure
+                    text_content = ""
+                    if token.content:
+                        # Handle different token content formats
+                        if isinstance(token.content, str):
+                            text_content = token.content
+                        elif isinstance(token.content, list):
+                            # Extract text from list of content blocks
+                            for content_block in token.content:
+                                if isinstance(content_block, dict) and content_block.get('type') == 'text':
+                                    text_content += content_block.get('text', '')
+
+                    if text_content:
+                        # Emit each token as an assistant_token event
+                        copilot_event = CopilotEvent(
+                            event_type="assistant_token",
+                            content=text_content,
+                            metadata={"session_id": session_id}
+                        )
+                        yield copilot_event
+                except Exception as token_error:
+                    logger.error(
+                        "Error processing copilot token",
+                        error=str(token_error),
+                        session_id=session_id
+                    )
+                    continue
+
+            logger.info(f"Copilot streaming completed with {token_count} tokens", session_id=session_id)
+
+            # After streaming completes, update memory in background
+            state: StateSnapshot = await sync_to_async(self._graph.get_state)(config=config)
+            if state.values and "messages" in state.values:
+                asyncio.create_task(
+                    self._update_long_term_memory(
+                        user_id, convert_to_openai_messages(state.values["messages"]), config["metadata"]
+                    )
+                )
+
+        except Exception as stream_error:
+            logger.error("Error in copilot stream processing", error=str(stream_error), session_id=session_id)
+            # Emit error event
+            yield CopilotEvent(
+                event_type="error",
+                content=str(stream_error),
+                metadata={"session_id": session_id}
+            )
             raise stream_error
 
     async def get_chat_history(self, session_id: str) -> list[Message]:

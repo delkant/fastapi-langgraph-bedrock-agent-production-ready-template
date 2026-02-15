@@ -6,11 +6,11 @@ DOCKER_COMPOSE ?= docker-compose
 
 set-env:
 	@if [ -z "$(ENV)" ]; then \
-		echo "ENV is not set. Usage: make set-env ENV=development|staging|production"; \
+		echo "ENV is not set. Usage: make set-env ENV=local|development|staging|production"; \
 		exit 1; \
 	fi
-	@if [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ] && [ "$(ENV)" != "test" ]; then \
-		echo "ENV is not valid. Must be one of: development, staging, production, test"; \
+	@if [ "$(ENV)" != "local" ] && [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ] && [ "$(ENV)" != "test" ]; then \
+		echo "ENV is not valid. Must be one of: local, development, staging, production, test"; \
 		exit 1; \
 	fi
 	@echo "Setting environment to $(ENV)"
@@ -23,6 +23,10 @@ prod:
 staging:
 	@echo "Starting server in staging environment"
 	@bash -c "source scripts/set_env.sh staging && ./.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --loop uvloop"
+
+local:
+	@echo "Starting server in local environment"
+	@bash -c "source scripts/set_env.sh local && uv run uvicorn app.main:app --reload --port 8000 --loop uvloop"
 
 dev:
 	@echo "Starting server in development environment"
@@ -57,11 +61,11 @@ docker-build:
 
 docker-build-env:
 	@if [ -z "$(ENV)" ]; then \
-		echo "ENV is not set. Usage: make docker-build-env ENV=development|staging|production"; \
+		echo "ENV is not set. Usage: make docker-build-env ENV=local|development|staging|production"; \
 		exit 1; \
 	fi
-	@if [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ]; then \
-		echo "ENV is not valid. Must be one of: development, staging, production"; \
+	@if [ "$(ENV)" != "local" ] && [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ]; then \
+		echo "ENV is not valid. Must be one of: local, development, staging, production"; \
 		exit 1; \
 	fi
 	@./scripts/build-docker.sh $(ENV)
@@ -76,11 +80,11 @@ docker-run:
 
 docker-run-env:
 	@if [ -z "$(ENV)" ]; then \
-		echo "ENV is not set. Usage: make docker-run-env ENV=development|staging|production"; \
+		echo "ENV is not set. Usage: make docker-run-env ENV=local|development|staging|production"; \
 		exit 1; \
 	fi
-	@if [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ]; then \
-		echo "ENV is not valid. Must be one of: development, staging, production"; \
+	@if [ "$(ENV)" != "local" ] && [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ]; then \
+		echo "ENV is not valid. Must be one of: local, development, staging, production"; \
 		exit 1; \
 	fi
 	@ENV_FILE=.env.$(ENV); \
@@ -93,11 +97,11 @@ docker-run-env:
 
 docker-logs:
 	@if [ -z "$(ENV)" ]; then \
-		echo "ENV is not set. Usage: make docker-logs ENV=development|staging|production"; \
+		echo "ENV is not set. Usage: make docker-logs ENV=local|development|staging|production"; \
 		exit 1; \
 	fi
-	@if [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ]; then \
-		echo "ENV is not valid. Must be one of: development, staging, production"; \
+	@if [ "$(ENV)" != "local" ] && [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ]; then \
+		echo "ENV is not valid. Must be one of: local, development, staging, production"; \
 		exit 1; \
 	fi
 	@ENV_FILE=.env.$(ENV); \
@@ -109,11 +113,11 @@ docker-logs:
 
 docker-stop:
 	@if [ -z "$(ENV)" ]; then \
-		echo "ENV is not set. Usage: make docker-stop ENV=development|staging|production"; \
+		echo "ENV is not set. Usage: make docker-stop ENV=local|development|staging|production"; \
 		exit 1; \
 	fi
-	@if [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ]; then \
-		echo "ENV is not valid. Must be one of: development, staging, production"; \
+	@if [ "$(ENV)" != "local" ] && [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ]; then \
+		echo "ENV is not valid. Must be one of: local, development, staging, production"; \
 		exit 1; \
 	fi
 	@ENV_FILE=.env.$(ENV); \
@@ -126,11 +130,11 @@ docker-stop:
 # Docker Compose commands for the entire stack
 docker-compose-up:
 	@if [ -z "$(ENV)" ]; then \
-		echo "ENV is not set. Usage: make docker-compose-up ENV=development|staging|production"; \
+		echo "ENV is not set. Usage: make docker-compose-up ENV=local|development|staging|production"; \
 		exit 1; \
 	fi
-	@if [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ]; then \
-		echo "ENV is not valid. Must be one of: development, staging, production"; \
+	@if [ "$(ENV)" != "local" ] && [ "$(ENV)" != "development" ] && [ "$(ENV)" != "staging" ] && [ "$(ENV)" != "production" ]; then \
+		echo "ENV is not valid. Must be one of: local, development, staging, production"; \
 		exit 1; \
 	fi
 	@ENV_FILE=.env.$(ENV); \
@@ -169,11 +173,12 @@ help:
 	@echo "Usage: make <target>"
 	@echo "Targets:"
 	@echo "  install: Install dependencies"
-	@echo "  set-env ENV=<environment>: Set environment variables (development, staging, production, test)"
+	@echo "  set-env ENV=<environment>: Set environment variables (local, development, staging, production, test)"
 	@echo "  run ENV=<environment>: Set environment and run server"
-	@echo "  prod: Run server in production environment"
-	@echo "  staging: Run server in staging environment"
+	@echo "  local: Run server in local environment"
 	@echo "  dev: Run server in development environment"
+	@echo "  staging: Run server in staging environment"
+	@echo "  prod: Run server in production environment"
 	@echo "  eval: Run evaluation with interactive mode"
 	@echo "  eval-quick: Run evaluation with default settings"
 	@echo "  eval-no-report: Run evaluation without generating report"

@@ -1,0 +1,69 @@
+version: '3.8'
+
+# Langfuse standalone docker-compose for development
+# This file can be used independently or merged with main docker-compose.yml
+
+services:
+  langfuse-db:
+    image: postgres:15
+    container_name: langfuse-postgres
+    environment:
+      POSTGRES_DB: langfuse
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse_password
+    ports:
+      - "5344:5432"  # Use different port to avoid collision with main postgres
+    volumes:
+      - langfuse-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - langfuse-network
+
+  langfuse-server:
+    image: langfuse/langfuse:3.150
+    container_name: langfuse-server
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    ports:
+      - "3001:3000"  # Use port 3001 to avoid collision with Grafana
+    environment:
+      # Database connection
+      - DATABASE_URL=postgresql://langfuse:langfuse_password@langfuse-db:5432/langfuse
+
+      # Authentication
+      - NEXTAUTH_URL=http://localhost:3001
+      - NEXTAUTH_SECRET=langfuse_secret_key_change_in_production
+
+      # Salt for hashing
+      - SALT=langfuse_salt_change_in_production
+
+      # Email configuration (optional)
+      # - SMTP_CONNECTION_URL=smtps://username:password@smtp.example.com:465
+
+      # Disable telemetry in development
+      - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=true
+
+      # Node environment
+      - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=2048
+
+      # Next.js configuration
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - ./config:/app/config:ro
+    restart: unless-stopped
+    networks:
+      - langfuse-network
+
+volumes:
+  langfuse-postgres-data:
+
+networks:
+  langfuse-network:
+    driver: bridge

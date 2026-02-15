@@ -20,7 +20,10 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && pip install --upgrade pip \
     && pip install uv \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/*
 
 # Copy pyproject.toml first to leverage Docker cache
 COPY pyproject.toml .
@@ -35,9 +38,6 @@ RUN chmod +x /app/scripts/docker-entrypoint.sh
 # Create a non-root user
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
-
-# Create log directory
-RUN mkdir -p /app/logs
 
 # Default port
 EXPOSE 8000
